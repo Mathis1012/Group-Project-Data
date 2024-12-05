@@ -1,0 +1,664 @@
+---
+title: "Group Project"
+author: "Mathis"
+date: "2024-11-14"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+# Data exploration
+```{r}
+#reading libraries for large data analysis
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(ComplexHeatmap)
+library(circlize)
+library(skimr)
+```
+## Reading the data
+```{r}
+setwd("C:/Users/mathi/OneDrive - UGent/Ugent/1ste Master/LSA/Group_project")
+influ <- read.csv("fluprint_export.csv")
+#Overview of the variables and structure of the dataframe
+head(influ)
+str(influ)
+summary(influ)
+#is a matrix with data and meta-data.
+```
+## Data cleaning
+### Changing "NULL" values to NA
+```{r}
+setwd("C:/Users/mathi/OneDrive - UGent/Ugent/1ste Master/LSA/Group_project")
+influ_fact <- read.csv("fluprint_export.csv")
+
+
+#changing all "NULL" values to NA
+influ_fact[influ_fact == "NULL"] <- NA
+
+head(influ_fact)
+str(influ_fact)
+skim(influ_fact)
+```
+### Changing variables to factor
+```{r}
+#Changing variables to factor
+influ_fact$gender <- as.factor(influ_fact$gender)
+influ_fact$race <- as.factor(influ_fact$race)
+influ_fact$visit_type_hai <- as.factor(influ_fact$visit_type_hai)
+influ_fact$vaccine <- as.factor(influ_fact$vaccine)
+influ_fact$assay <- as.factor(influ_fact$assay)
+influ_fact$name <- as.factor(influ_fact$name)
+influ_fact$name_formatted <- as.factor(influ_fact$name_formatted)
+influ_fact$subset <- as.factor(influ_fact$subset)
+influ_fact$units <- as.factor(influ_fact$units)
+influ_fact$cmv_status <- as.factor(influ_fact$cmv_status)
+influ_fact$ebv_status <- as.factor(influ_fact$ebv_status)
+influ_fact$vaccine_response <- as.factor(influ_fact$vaccine_response)
+influ_fact$statin_use <- as.factor(influ_fact$statin_use)
+influ_fact$flu_vaccination_history <- as.factor(influ_fact$flu_vaccination_history)
+influ_fact$vaccinated_1yr_prior <- as.factor(influ_fact$vaccinated_1yr_prior)
+influ_fact$vaccinated_2yr_prior <- as.factor(influ_fact$vaccinated_2yr_prior)
+influ_fact$vaccinated_3yr_prior <- as.factor(influ_fact$vaccinated_3yr_prior)
+influ_fact$vaccinated_4yr_prior <- as.factor(influ_fact$vaccinated_4yr_prior)
+influ_fact$vaccinated_5yr_prior <- as.factor(influ_fact$vaccinated_5yr_prior)
+influ_fact$vaccine_type_1yr_prior <- as.factor(influ_fact$vaccine_type_1yr_prior)
+influ_fact$vaccine_type_2yr_prior <- as.factor(influ_fact$vaccine_type_2yr_prior)
+influ_fact$vaccine_type_3yr_prior <- as.factor(influ_fact$vaccine_type_3yr_prior)
+influ_fact$vaccine_type_4yr_prior <- as.factor(influ_fact$vaccine_type_4yr_prior)
+influ_fact$vaccine_type_5yr_prior <- as.factor(influ_fact$vaccine_type_5yr_prior)
+influ_fact$influenza_infection_history <- as.factor(influ_fact$influenza_infection_history)
+influ_fact$influenza_hospitalization <- as.factor(influ_fact$influenza_hospitalization)
+head(influ_fact)
+str(influ_fact)
+```
+
+## Dividing the data into two dataframes: metadata and experimental data
+### Metadata
+
+```{r}
+#Metadata, unique rows
+influ_meta <- influ_fact %>%
+  select(-name_formatted, -data, -name, -subset, -mesurment_id, -units,-assay)%>%
+  distinct()
+head(influ_meta)
+summary(influ_meta)
+```
+### Experimental data
+
+```{r}
+#Experimental data
+influ_exp <- influ_fact %>%
+  select(donor_id, name_formatted, data)
+summary(influ_exp)
+#class of data
+class(influ_exp$data)
+```
+### Changing the format of the experimental data to have the columns with the names of names_formatted (per celtype) and the cells of the table will have the “data” values.
+```{r}
+#Set the values of name_formatted as column names with the values of data as the values of the columns. Resulting in 1 line per donor and the values of the different measurements (data) as columns
+influ_exp_name <- influ_exp %>%
+  pivot_wider(names_from = name_formatted, values_from = data, values_fn = list(data = ~mean(as.numeric(.x)))) #If you don't want to aggregate (e.g., take the mean), you need to ensure that each combination is unique before pivoting. If you remove the mean you will get an error. This is because apparently there are duplicates and by taking the mean you remove the duplicates.
+head(influ_exp_name)
+```
+
+
+
+### Saving the metadata and experimental data as a csv file
+```{r}
+#Saving experimental data as a csv file
+write.csv(influ_exp_name, "influ_exp_name.csv")
+#Saving metadata as a csv file
+write.csv(influ_meta, "influ_meta.csv")
+```
+
+## Missing values
+### Missing values in experimental data
+```{r}
+#checking the amount of missing values in the experimental data per column
+missing_values_exp <- influ_exp_name %>% 
+  summarise_all(~sum(is.na(.))/n())
+#Sorting the missing values (low to high)
+missing_values_exp<- missing_values_exp %>%
+  gather() %>%
+  arrange(value)
+head(missing_values_exp)
+```
+### Missing values in metadata
+```{r}
+#checking the amount of missing values in the metadata per column
+missing_values_meta <- influ_meta %>% 
+  summarise_all(~sum(is.na(.))/n())
+#Sorting the missing values (low to high)
+missing_values_meta <- missing_values_meta %>%
+  gather() %>%
+  arrange(value)
+print(missing_values_meta)
+```
+
+
+# Research question 1: Influence of age and vaccine respons 
+Is there an influence of age on vaccince respons? 
+
+## Preprocessing
+### Creating age categories
+
+```{r}  
+# Defining age categories
+age_cat <- cut(influ_meta$visit_age,  
+                        breaks = c(0, 10, 20, 30, 40, 50, 60, 70, Inf),  
+                        labels = c("0-10", "11-20", "21-30", "31-40", "41-50", "51-60", "61-70", "71+"))
+ 
+# Dataframe
+age_res <- data.frame(influ_meta$visit_age, age_cat)
+head(age_res)
+```
+
+```{r}  
+# Create a DataFrame with Age Category and Vaccine Response
+age_res <- data.frame(
+  visit_age = influ_meta$visit_age,
+  age_cat = age_cat,
+  response = influ_meta$vaccine_response  # Assuming this exists as "High" or "Low"
+)
+```
+
+```{r}
+# Summarize and Calculate Percentages
+summary_data <- age_res %>%
+  group_by(age_cat, response) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  group_by(age_cat) %>%
+  mutate(percentage = count / sum(count) * 100)
+print(summary_data)
+```
+### Visualization of different age_categories with NA values: Stacked Bar Chart with Percentages
+
+```{r}
+# Visualization: Stacked Bar Chart with Percentages
+ggplot(summary_data, aes(x = age_cat, y = percentage, fill = response)) +
+  geom_bar(stat = "identity", position = "stack") + #"identity" is used to determine the bar heights based on calculated data and "stack" is used to place the percentages of the different vaccine responses on top of each other
+  labs(
+    x = "Age category (years)",
+    y = "Percentage (%)",
+    fill = "Vaccine response",
+    title = "Vaccine response by age category") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) + #to convert numeric values into percentages on the y-axis; “scale = 1” ensures that the original data is already interpreted as percentages; without “scale = 1”, the default scaling multiplies values by 100 (e.g. 0.5 becomes 50%)
+  scale_fill_manual(values = c("#E69F00", "#56B4E9"), #color-blind friendly colors
+                    labels = c("0" = "Low responder", "1" = "High responder")) +  #legend labels
+  theme_minimal()
+```
+
+## Formulation of the hypothesis
+
+There are three options for the vaccine response: "0" defines low responders, "1" defines high responders and "NA" are missing values.
+ 
+When the summary_data is printed, the absolute numbers and percentages for every age category for response = 0, response = 1 and NA is visualised. Based on this, it is decided to not use the highest age categories, because they contain too much missing values. The age category "31-40" contains only data from 20 donors and is therefore also not used. Only the age categories "0-10", "11-20" and "21-30" will be selected for the hypothesis testing.
+ 
+Null hypothesis: 
+There is no association in the influenza vaccine response between these different three age categories ("0-10", "11-20" and "21-30").
+H0:P(Low responder∣Age category)=P(Low responder)
+ 
+Alternative hypothesis (non-directional): 
+There is an association in the influenza vaccine response between these different threeage categories ("0-10", "11-20" and "21-30").
+Ha:P(Low responder∣Age category)!= P(Low responder)
+
+
+## Explanation missing (NA) values and visualisation of the three age categories ("0-10", "11-20" and "21-30"). 
+
+It cannot be determined whether the person is a low or high responder based on the age of the donor. Therefore, the missing values are MCAR (missing completely at random). To avoid bias, the data of donors without a value for vaccine response, is deleted. This is done using the "na.omit()" function.
+
+```{r}
+# Define age categories
+age_cat <- cut(influ_meta$visit_age,  
+                        breaks = c(0, 10, 20, 30),  
+                        labels = c("0-10", "11-20", "21-30"))
+ 
+# Dataframe with age categories corresponding with the age of each donor
+age_res <- data.frame(influ_meta$visit_age, age_cat)
+print(age_res)
+ 
+# Create a dataframe with age category and vaccine response
+age_res <- data.frame(
+  visit_age = influ_meta$visit_age,
+  age_cat = age_cat,
+  response = influ_meta$vaccine_response)
+ 
+# Remove rows with missing values (NA)
+age_res <- na.omit(age_res)  # Removes rows where any column has NA
+ 
+# Summarise and calculate percentages
+summary_data <- age_res %>%
+  group_by(age_cat, response) %>%
+  summarise(count = n(), .groups = 'drop') %>%  #"drop" ungroups the data after summarisation
+  group_by(age_cat) %>%
+  mutate(percentage = count / sum(count) * 100)
+print(summary_data)
+ 
+# Stacked bar chart with percentages
+ggplot(summary_data, aes(x = age_cat, y = percentage, fill = response)) +
+  geom_bar(stat = "identity", position = "stack") + #"identity" is used to determine the bar heights based on calculated data and "stack" is used to place the percentages of the different vaccine responses on top of each other
+  labs(
+    x = "Age category (years)",
+    y = "Percentage (%)",
+    fill = "Vaccine response",
+    title = "Vaccine response by age category") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) + #to convert numeric values into percentages on the y-axis; “scale = 1” ensures that the original data is already interpreted as percentages; without “scale = 1”, the default scaling multiplies values by 100 (e.g. 0.5 becomes 50%)
+  scale_fill_manual(values = c("#E69F00", "#56B4E9"), #color-blind friendly colors
+                    labels = c("0" = "Low responder", "1" = "High responder")) +  #legend labels
+  theme_minimal()
+```
+
+## Outliers and standardisation
+Outliers cannot be present because the vaccine response is binary, which means only two values are possible: 0 (low responder) and 1 (high responder).
+
+Standardisation is necessary when different variables have different scales, because of the following problem: when a method is used in which comparisons or calculations are made taking into account the variance of the variables, the variable with the largest magnitude will dominate the variability in the data.
+ 
+Standardisation is the process of translating and scaling variables in order to distribute them around a mean of zero with a standard deviation of one. Standardisation makes sure that covariances are easily comparable for each pair of variables. If this is not performed, variables with larger ranges of numbers will have higher covariances.
+ 
+Standardisation can only be performed when variables are quantitative (numeric). Because this hypothesis contains two categorical variables (age and influenza vaccine response), standardisation is not possible.
+
+
+## Statistical analysis: chi-square test
+```{r}
+# Chi-square Test
+chisq_test <- chisq.test(age_res$age_cat, age_res$response)
+print(chisq_test)
+```
+
+The p-value (0.3339) is greater than the significance level of 0.05. This indicates that there is no statistically significant association between age categories and vaccine response. In other words, the differences in vaccine response across age categories are likely due to random chance rather than a real effect.
+
+```{r}
+# Calculating the odds ratio for each age category (effect size) to be a high or low responder
+## Create a contingency table
+counts <- table(age_res$age_cat, age_res$response)
+
+## Calculate the odds for each age category
+odds <- apply(counts, 1, function(row) {
+  high_responder_odds <- row["1"] / row["0"]
+  return(high_responder_odds)
+})
+
+## Calculate the odds ratio compared to a reference category (e.g., "0-10")
+reference_odds <- odds["0-10"]
+odds_ratios <- odds / reference_odds
+
+## Print the odds ratios
+odds_ratios
+```
+## Interpretation of the results
+
+The p-value (0.3339) is greater than the significance level of 0.05. This indicates that there is no statistically significant association between age categories and vaccine response. In other words, the differences in vaccine response across age categories are likely due to random chance rather than a real effect.
+
+Odds ratios (effect size):
+Although without a significant difference in the statistical test, the odds of being a high responder are approximately 30% higher in the age category 11-20 years compared to the 0-10 years category. The odds of being a high responder are approximately 67% times higher in the 21-30 age category compared to the 0-10 years category. This can show that there is a potential trend where older groups have a higher odds of vaccine response, however again this is not statistically significant.
+
+The null hypothesis cannot thus not be rejected base on the p-value of the statistical test.
+
+
+# Research question 2: Which type of cells are different in low responders vs high responders group?
+
+Which type of cells can be used to predict/show a correlation with vaccine respons? Here First it would be useful to see which celltypes are different in the low responder vs high responder group. That is what is done in this code. Using this we can make a H0 and HA hypothesis.
+
+## Preprocessing
+### Making new dataset with experimental data and vaccine_respons (from metadata)
+This is done because our dependent value is vaccine_respons and we want to see what experimental data influences the vaccine_respons.
+
+```{r}
+#Making new dataset with experimental data and vaccinerespons
+influ_HP <- influ_exp_name %>%
+  mutate(vaccine_response = as.factor(influ_meta$vaccine_response))
+```
+
+### Dividing the influ_HP dataset into 2 groups based on the vaccine_response
+
+The dataset "influ_HP" is divided into 2 groups: one group with the high responders (vaccine_response = 1) and one group with the low responders (vaccine_response = 0). This is necessary to show potential differences in the data depending on the vaccine response. In this way, the donors with a missing value for influenza vaccine response are deleted.
+
+```{r}
+# Dividing the influ_HP dataset into 2 groups based on the vaccine_response
+influ_HP_vaccine_responders <- influ_HP %>%
+  filter(vaccine_response == 1)%>%
+  select(-vaccine_response)
+
+influ_HP_non_vaccine_responders <- influ_HP %>%
+  filter(vaccine_response == 0)%>%
+   select(-vaccine_response)
+
+head(influ_HP_vaccine_responders)
+head(influ_HP_non_vaccine_responders)
+```
+
+### Imputation: changing NA variables to mean in responders and non-responders dataset
+The missing values (NA) in both datasets are MAR (missing at random) because the pattern of missing values is predictable from other variables in the data. The dataset contains data of different studies of which some did not measure particular cell types. This means that the probability in missingness is dependent on the study origin and not directly on the value of cell type itself.
+ 
+To solve the problem of MAR missing values, imputation is performed. That is why the missing values are changed into the mean of the available values. The mean of each cell type in both datasets (responders and non-responders) is calculated and those means replace the missing values for that specific cell type.
+
+```{r}
+#Changing NA variables to mean in responders and non-responders dataset
+influ_HP_vaccine_responders <- influ_HP_vaccine_responders %>%
+  mutate_all(~replace_na(., mean(., na.rm = TRUE)))
+influ_HP_non_vaccine_responders <- influ_HP_non_vaccine_responders %>%
+  mutate_all(~replace_na(., mean(., na.rm = TRUE)))
+
+head(influ_HP_vaccine_responders)
+head(influ_HP_non_vaccine_responders)
+```
+### Looking at the differences of the cell types between the vaccine responders and non-responders
+#### Making a new dataset with the difference of mean values of all columns (=cell types) between vaccine responders and non-responders
+```{r}
+#Making a new dataset with mean values of all columns of vaccine responders and non-responders
+mean_responder <- influ_HP_vaccine_responders %>%
+  select(-donor_id) %>%
+  summarise_all(mean)
+head(mean_responder)
+
+mean_non_responder <- influ_HP_non_vaccine_responders %>%
+  select(-donor_id) %>%
+  summarise_all(mean)
+head(mean_non_responder)
+```
+
+The means in both datasets are compared to determine how large the differences are of a particular cell type between responders (high responders) and non_responders (low responders). The function "gather()" is used because it reshapes "mean_diff" from a wide format (one column per cell type) to a long format (two columns: one for the cell types (key) and one for the differences in means (value)). The function "arrange" sorts the differences in means from high to low.
+
+```{r}
+#difference in mean values and sorting them from high to low
+mean_divided <- mean_responder / mean_non_responder
+mean_divided <- mean_divided %>%
+  gather() %>%
+  arrange(-value)
+head(mean_divided)
+```
+The cell types (keys) with the highest difference (value) between the high and low responders group, are the most likely to be associated with the dependent variable vaccine response. Therefore, these cell types are the most interesting to use for statistical analysis.
+ 
+However, the missing values of each cell type were replaced by the mean of that cell type via imputation. This means that the higher the number of missing values, the less trustworthy the calculated difference (value). That is why the number of missing values needs to be calculated.
+
+#### Making dataset with mean_divided values and combining with the corresponding amount of missing values for that specific cell type.
+
+The number of missing values for each cell type needs to be calculated to compare this number with the difference in cell type value between the two groups (high vs low responders). This number was already calculated at the end of the data cleaning (see "### Calculating the number of missing values") and defined in the dataset "missing_values_exp".
+ 
+The cell types with the lowest number of missing values and the highest (absolute) difference between the two groups, are the most interesting to use for statistical analysis.
+ 
+In the following code, "lef_join()" is used. This function ensures that all rows from the left dataset (mean_diff in this case) are preserved, even if there are no matching rows in the right dataset (missing_values_exp), which is here not the case (both datasets contain the same number of rows). If a key exists in mean_diff but not in missing_values_exp, the columns brought in from missing_values_exp will contain NA for that key.
+
+
+```{r}
+#Making another dataset with mean_diff values and the corresponding amount of missing values
+mean_divided_missing <- mean_divided %>%
+  left_join(missing_values_exp, by = "key")   #key here is the celtype e.g. B_cells
+#Replace value.x with mean_diff and value.y with missing values
+mean_divided_missing <- mean_divided_missing %>%
+  select(key, value.x, value.y) %>%
+  rename(mean_div = value.x, missing_values = value.y)
+```
+
+```{r}
+#Sorting from low to high on the missing values
+mean_divided_missing <- mean_divided_missing %>%
+  arrange(missing_values)
+head(mean_divided_missing, 100)
+```
+
+The cell types with the lowest number of missing values are the most interesting to use for statistical analysis. Therefore, the first 100 keys are selected (first 100 with lowest number of missing values).
+ 
+The cell types with mean_divided values that are the furthest from 1 are the most interesting. This is because the mean of responders was divided by the mean of non-responders. When there is no difference in mean between the responders and non-responders group, this ratio.
+
+```{r}
+#Take the first 100 rows and sort them from high to low based on mean_diff
+mean_divided_missing <- mean_divided_missing %>%
+  slice(1:100)%>%
+  arrange(-mean_div)
+print(mean_divided_missing)
+```
+
+To see which cell types have the highest ratio deviating from 1, both the first (highest value for mean_divided) and last (lowest value for mean_divided) keys need to be examined. Because the first keys are actually proteins and not cell types, these keys are not selected.
+ 
+The cell types "CD161_pos_CD45RA_pos_Tregs" and "HLADR_neg_CD38_pos_CD4_pos_T_cells" are chosen for statistical analysis, because they have the highest ratio deviating from 1. Both cell types have approximately 55% of missing values (0.5486) and a mean_divided value of 1.844 and 0.497 respectively.
+
+HLADR_neg_CD38_pos_CD4_pos_T_cells (These cells are involved in chronic infections, so maybe because there is either CMV-or EBV present.)
+
+### Visualisation of the differences of CD161_pos_CD45RA_pos_Tregs and CD161_pos_CD45RA_pos_Tregs
+#### Making a combined dataset with the imputed data of the vaccine responders and non-responders
+```{r}
+#Combine the imputated data of the vaccine responders and non-responders
+combined_data <- bind_rows(influ_HP_vaccine_responders, influ_HP_non_vaccine_responders)
+
+# Arrange by donor_id
+combined_data <- combined_data %>%
+  arrange(-donor_id)
+
+head(combined_data)
+
+#count NA values
+combined_data %>%
+  summarise_all(~sum(is.na(.)))%>%
+  gather()
+```
+
+```{r}
+#Add the vaccine_respons from the metadata to the combined data.
+combined_data <- combined_data %>%
+  left_join(influ_meta %>% select(donor_id, vaccine_response), by = "donor_id")
+head(combined_data)
+```
+
+#### Visualisation of the differences in the cell types between the vaccine responders and non-responders
+
+```{r}
+#Visualisation of these differences using ggplot and drop na values (CD161_pos_CD45RA_pos_Tregs)
+combined_data %>%
+  ggplot(aes(x=vaccine_response, y=CD161_pos_CD45RA_pos_Tregs, col = vaccine_response))+
+  geom_boxplot()+
+  labs(title = "CD161_pos_CD45RA_pos_Tregs in vaccine responders and non-responders", x = "Vaccine response", y = "CD161_pos_CD45RA_pos_Tregs (% of parent)")+
+  scale_color_manual(values = c("#E69F00", "#56B4E9"), #color-blind friendly colors
+                    labels = c("0" = "Low responder", "1" = "High responder"))+
+  theme_minimal()
+```
+```{r}
+#Search for the ouliers
+combined_data %>%
+  select(donor_id, CD161_pos_CD45RA_pos_Tregs)%>%
+  arrange(-CD161_pos_CD45RA_pos_Tregs)
+
+#Count the amount of donors in the response group 0 and 1. Specifically for celtype: HLADR_neg_CD38_pos_CD4_pos_T_cells
+combined_data %>%
+  select(vaccine_response, CD161_pos_CD45RA_pos_Tregs) %>%
+  group_by(vaccine_response) %>%
+  summarise(count = n())
+```
+
+
+```{r}
+#Visualisation of these differences using ggplot and drop na values (B_cells)
+combined_data %>%
+  ggplot(aes(x=vaccine_response, y=HLADR_neg_CD38_pos_CD4_pos_T_cells, col = vaccine_response))+
+  geom_boxplot()+
+  labs(title = "HLADR_neg_CD38_pos_CD4_pos_T_cells in vaccine responders and non-responders", x = "Vaccine response", y = "HLADR_neg_CD38_pos_CD4_pos_T_cells (% of parent")+
+  scale_color_manual(values = c("#E69F00", "#56B4E9"), #color-blind friendly colors
+                    labels = c("0" = "Low responder", "1" = "High responder"))+
+  theme_minimal()
+```
+
+```{r}
+#Search for the outliers
+combined_data %>%
+  select(donor_id, HLADR_neg_CD38_pos_CD4_pos_T_cells)%>%
+  arrange(-HLADR_neg_CD38_pos_CD4_pos_T_cells)
+
+##Count the amount of donors in the response group 0 and 1. Specifically for celtype: HLADR_neg_CD38_pos_CD4_pos_T_cells
+combined_data %>%
+  select(vaccine_response, HLADR_neg_CD38_pos_CD4_pos_T_cells) %>%
+  group_by(vaccine_response) %>%
+  summarise(count = n())
+```
+
+## Formulation of the hypothesis
+Because these 2 cell types have the most differences and the least amount of missing values, these cell types are chosen for the hypothesis testing. 
+
+Null hypothesis: 
+There is no difference in amount of CD161_pos_CD45RA_pos_Tregs and HLADR_neg_CD38_pos_CD4_pos_T_cells between the vaccine responders and non-responders.
+H0:P(Low responder∣CD161_pos_CD45RA_pos_Tregs + HLADR_neg_CD38_pos_CD4_pos_T_cells)=P(Low responder)
+ 
+Alternative hypothesis:
+There is a difference in amount of CD161_pos_CD45RA_pos_Tregs and HLADR_neg_CD38_pos_CD4_pos_T_cells between the vaccine responders and non-responders.
+Ha:P(Low responder∣CD161_pos_CD45RA_pos_Tregs + HLADR_neg_CD38_pos_CD4_pos_T_cells)!= P(Low responder)
+
+## Normal distribution and standardisation
+
+Before we test these cell types, we need to see if the data are standardised and normalised. This is done by looking at the QQ-plot. If the data is not normally distributed, we need to log-transform the data. If the data is not on the same scale, we need to standardise the data. 
+
+### Normal distribution (QQ-plot)
+
+```{r}
+##Checking if normalisation and startdisation is needed for HLADR_neg_CD38_pos_CD4_pos_T_cells and CD161_pos_CD45RA_pos_Tregs
+
+#Normalisation, Is the data normally distributed?
+# Q-Q plot
+qqnorm(combined_data$CD161_pos_CD45RA_pos_Tregs)
+qqline(combined_data$CD161_pos_CD45RA_pos_Tregs, col = "red")
+
+qqnorm(combined_data$HLADR_neg_CD38_pos_CD4_pos_T_cells)
+qqline(combined_data$HLADR_neg_CD38_pos_CD4_pos_T_cells, col = "red")
+
+```
+
+Data is not normally distributed, so we need to log transform the data. (Especially HLADR_neg_CD38_pos_CD4_pos_T_cells)
+
+```{r}
+# Log transformation
+combined_data <- combined_data %>%
+  mutate(CD161_pos_CD45RA_pos_Tregs = log(CD161_pos_CD45RA_pos_Tregs + 1),
+         HLADR_neg_CD38_pos_CD4_pos_T_cells = log(HLADR_neg_CD38_pos_CD4_pos_T_cells + 1))
+
+# Q-Q plot after transformation
+qqnorm(combined_data$CD161_pos_CD45RA_pos_Tregs)
+qqline(combined_data$CD161_pos_CD45RA_pos_Tregs, col = "red")
+
+qqnorm(combined_data$HLADR_neg_CD38_pos_CD4_pos_T_cells)
+qqline(combined_data$HLADR_neg_CD38_pos_CD4_pos_T_cells, col = "red")
+```
+
+After this log-transformation, the data is more normally distributed.
+
+### Standardisation
+```{r}
+#Look at the different units of these 2 celtypes in the influ_fact dataset. To see if these are all on the same scale.
+influ_fact %>%
+  filter(name_formatted == "CD161_pos_CD45RA_pos_Tregs" | name_formatted == "HLADR_neg_CD38_pos_CD4_pos_T_cells")%>%
+  select(name_formatted, units)%>%
+  distinct()
+```
+
+The data of both celltypes are on the same scale and within one celtypes there is only one type of unit. Therefore, the data is already on the same scale, so no standardisation for the units is needed.
+
+```{r}
+#printing the values of both cell types
+combined_data %>%
+  group_by(vaccine_response)%>%
+  select(CD161_pos_CD45RA_pos_Tregs, HLADR_neg_CD38_pos_CD4_pos_T_cells)%>%
+  skim()
+```
+
+Because the standard deviation of the two cell types is very different, the data needs to be standardized. This is done by subtracting the mean of the data and dividing by the standard deviation. This is done for both cell types.
+
+Standardization: Not strictly necessary for logistic regression, but beneficial for interpretability, numerical stability, and convergence.
+
+```{r}
+# Select the relevant columns
+data_to_standardize <- combined_data %>%
+  select(CD161_pos_CD45RA_pos_Tregs, HLADR_neg_CD38_pos_CD4_pos_T_cells)
+
+# Calculate the mean and standard deviation for each feature
+means <- colMeans(data_to_standardize)
+sds <- apply(data_to_standardize, 2, sd)
+
+# Standardize each feature
+standardized_data <- data_to_standardize %>%
+  mutate(CD161_pos_CD45RA_pos_Tregs = (CD161_pos_CD45RA_pos_Tregs - means["CD161_pos_CD45RA_pos_Tregs"]) / sds["CD161_pos_CD45RA_pos_Tregs"],
+         HLADR_neg_CD38_pos_CD4_pos_T_cells = (HLADR_neg_CD38_pos_CD4_pos_T_cells - means["HLADR_neg_CD38_pos_CD4_pos_T_cells"]) / sds["HLADR_neg_CD38_pos_CD4_pos_T_cells"])
+
+# Add the standardized predictors back to the original data
+combined_data_standardized <- combined_data %>%
+  mutate(CD161_pos_CD45RA_pos_Tregs = standardized_data$CD161_pos_CD45RA_pos_Tregs,
+         HLADR_neg_CD38_pos_CD4_pos_T_cells = standardized_data$HLADR_neg_CD38_pos_CD4_pos_T_cells)
+
+# Check the first few rows of the standardized data
+combined_data_standardized %>%
+  select(CD161_pos_CD45RA_pos_Tregs, HLADR_neg_CD38_pos_CD4_pos_T_cells) %>%
+  head()
+```
+### Visualisation of data after transformation and standardisation
+Note: The values of the cell types become unitless after the standardisation.
+
+```{r}
+#Visualisation of these differences using ggplot (CD161_pos_CD45RA_pos_Tregs)
+combined_data_standardized %>%
+  ggplot(aes(x=vaccine_response, y=CD161_pos_CD45RA_pos_Tregs, col = vaccine_response))+
+  geom_boxplot()+
+  labs(title = "CD161_pos_CD45RA_pos_Tregs in vaccine responders and non-responders", x = "Vaccine response", y = "CD161_pos_CD45RA_pos_Tregs")+
+  scale_color_manual(values = c("#E69F00", "#56B4E9"), #color-blind friendly colors
+                    labels = c("0" = "Low responder", "1" = "High responder"))+
+  theme_minimal()
+```
+
+```{r}
+#Visualisation of these differences using ggplot (HLADR_neg_CD38_pos_CD4_pos_T_cells)
+combined_data_standardized %>%
+  ggplot(aes(x=vaccine_response, y=HLADR_neg_CD38_pos_CD4_pos_T_cells, col = vaccine_response))+
+  geom_boxplot()+
+  labs(title = "HLADR_neg_CD38_pos_CD4_pos_T_cells in vaccine responders and non-responders", x = "Vaccine response", y = "HLADR_neg_CD38_pos_CD4_pos_T_cells log(% parent)")+
+ scale_color_manual(values = c("#E69F00", "#56B4E9"), #color-blind friendly colors
+                    labels = c("0" = "Low responder", "1" = "High responder"))+
+  theme_minimal()
+```
+
+```{r}
+#Search for the ouliers in HLADR_neg_CD38_pos_CD4_pos_T_cells
+combined_data_standardized %>%
+  select(donor_id, HLADR_neg_CD38_pos_CD4_pos_T_cells)%>%
+  arrange(-HLADR_neg_CD38_pos_CD4_pos_T_cells)%>%
+  head()%>%
+  tail()
+```
+
+```{r}
+#Save the standerdized data as a csv file
+write.csv(combined_data_standardized, "combined_data_standardized.csv")
+```
+
+
+## Statistical analysis: Logistic regression
+### Hypothesis testing
+If we take CD161_pos_CD45RA_pos_Tregs and HLADR_neg_CD38_pos_CD4_pos_T_cells and test this statistically.
+```{r}
+# Fit logistic regression model
+logistic_model <- glm(vaccine_response ~ CD161_pos_CD45RA_pos_Tregs + HLADR_neg_CD38_pos_CD4_pos_T_cells, 
+                      data = combined_data_standardized, 
+                      family = binomial)
+
+# Summary of the model
+summary(logistic_model)
+```
+```{r}
+# Odds ratios (effect size)
+exp(coef(logistic_model))
+
+#Confidence interval of 95%
+confint(logistic_model, level = 0.95)
+```
+
+## Interpretation of the coefficients
+
+Intercept: The intercept is -0.9087, which is statistically significant (p < 0.001). This represents the log-odds of being a vaccine responder when both predictors are zero.
+
+CD161_pos_CD45RA_pos_Tregs: This variable has a positive coefficient (0.6367) and is highly significant (p < 0.001). This suggests that higher levels of CD161_pos_CD45RA_pos_Tregs are associated with increased odds of being a vaccine responder. The odds ratio is approximately 1.89, meaning that for each unit increase in CD161_pos_CD45RA_pos_Tregs, the odds of being a vaccine responder increase by about 89%.
+
+HLADR_neg_CD38_pos_CD4_pos_T_cells: This variable has a negative coefficient (-0.2619) and is marginally significant (p ≈ 0.064). This suggests that higher levels of HLADR_neg_CD38_pos_CD4_pos_T_cells might be associated with decreased odds of being a vaccine responder, but the evidence is not strong. The odds ratio is approximately 0.77, indicating a potential decrease in the odds of being a vaccine responder by about 23% for each unit increase in HLADR_neg_CD38_pos_CD4_pos_T_cells. Or in other words the odds of being a non-vaccine responder are 77% higher for each unit increase in HLADR_neg_CD38_pos_CD4_pos_T_cells.
+
+Confidence Intervals: The 95% confidence intervals for the coefficients provide a range within which the true effect sizes are likely to fall. For CD161_pos_CD45RA_pos_Tregs, the interval (0.4043, 0.8794) does not include zero, reinforcing its significance. For HLADR_neg_CD38_pos_CD4_pos_T_cells, the interval (-0.5476, 0.0088) includes zero, indicating that the effect might not be significant.
+
+In summary, CD161_pos_CD45RA_pos_Tregs appears to be a significant predictor of vaccine response, while HLADR_neg_CD38_pos_CD4_pos_T_cells shows a potential but not statistically strong association. So the null hypothesis for CD161_pos_CD45RA_pos_Tregs can be rejected, but for HLADR_neg_CD38_pos_CD4_pos_T_cells it cannot be rejected.
+
+z-value of logistic regression: The z-value is a measure of how many standard deviations the coefficient is from zero. The higher the z-value, the more significant the predictor is.
+
+Maybe we can use these findings of CD161_pos_CD45RA_pos_Tregs to predict the vaccine response in the machine learning part?
