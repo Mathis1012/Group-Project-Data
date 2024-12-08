@@ -451,7 +451,7 @@ HLADR_neg_CD38_pos_CD4_pos_T_cells, these cells are involved in chronic infectio
 CD161_pos_CD45RA_pos Tregs help suppress excessive immune responses, preventing autoimmunity and maintaining immune homeostasis
 
 
-### Visualisation of the differences of CD161_pos_CD45RA_pos_Tregs and CD161_pos_CD45RA_pos_Tregs
+### Visualisation of the differences of CD161_pos_CD45RA_pos_Tregs and HLADR_neg_CD38_pos_CD4_pos_T_cells
 To visualize the cells we need to combine the imputated responder and non-responder group and add then the vaccine_response column again. By doing this we can visualise the differences for both cell types.
 
 #### Making a combined dataset with the imputed data of the vaccine responders and non-responders
@@ -775,7 +775,7 @@ The odds ratio is approximately 0.77 (95%CI [0.5783082, 1.0088470]). This means 
 
 In summary, CD161_pos_CD45RA_pos_Tregs appears to be a significant predictor of vaccine response, while HLADR_neg_CD38_pos_CD4_pos_T_cells shows a potential but not statistically strong association. So the null hypothesis for CD161_pos_CD45RA_pos_Tregs can be rejected, but for HLADR_neg_CD38_pos_CD4_pos_T_cells it cannot be rejected.
 
-# Machine Learning: Random Forest
+# Machine Learning
 The machine learning model was made in python code (see other file). Here we just made the used dataset. This data set contains all the cell types that are expressed in "% of Parent" and the vaccine response. Missing data of those cell types are also being imputated by the mean of that cell type as seen before under Research question 2. This is done to ensure that the data is on the same scale and can be used for the machine learning model.
 
 ## Preprocessing of the data
