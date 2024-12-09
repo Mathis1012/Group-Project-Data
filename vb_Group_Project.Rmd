@@ -1,5 +1,5 @@
 ---
-title: "Group Project"
+title: "Group_Project"
 author: "Mathis"
 date: "2024-11-14"
 output: 
@@ -225,7 +225,7 @@ age_cat <- cut(influ_meta$visit_age,
  
 # Dataframe with age categories corresponding with the age of each donor
 age_res <- data.frame(influ_meta$visit_age, age_cat)
-print(age_res)
+head(age_res)
  
 # Create a dataframe with age category and vaccine response
 age_res <- data.frame(
@@ -287,9 +287,40 @@ A chi-square test was chosen as the ideal statistical test for this hypothesis, 
 # Chi-square Test
 chisq_test <- chisq.test(age_res$age_cat, age_res$response)
 print(chisq_test)
+p_value <- chisq_test$p.value
 ```
 
 The p-value (0.3339) is greater than the significance level of 0.05. This indicates that there is no statistically significant association between age categories and vaccine response for these three age categories ("0-10", "11-20" and "21-30"). In other words, the differences in vaccine response across age categories are likely due to random chance rather than a real effect.
+
+## Visualisation after statistical testing
+```{r}
+library(scales)
+
+ggplot(summary_data, aes(x = age_cat, y = percentage, fill = response)) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
+  labs(
+    x = "Age category (years)",
+    y = "Percentage (%)",
+    fill = "Vaccine response",
+    title = "Vaccine response by age category"
+  ) +
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  scale_fill_manual(values = c("#E69F00", "#56B4E9"),
+                    labels = c("0" = "Low responder", "1" = "High responder")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4, color = "white") +
+  annotate("text", x = Inf, y = Inf, label = paste("P-value =", round(p_value, 4)), 
+           hjust = 3.85, vjust = 0.9, size = 4, color = "black")
+```
+
 
 ```{r}
 # Calculating the odds ratio for each age category (effect size) to be a high or low responder
@@ -604,8 +635,6 @@ combined_data %>%
 
 Because the standard deviation of the two cell types is very different, the data needs to be standardized. This is done by subtracting the mean of the data and dividing by the standard deviation. This is done for both cell types.
 
-Standardization is not strictly necessary for logistic regression, but beneficial for interpretability, numerical stability, and convergence.
-
 ```{r}
 # Select the relevant columns
 data_to_standardize <- combined_data %>%
@@ -632,7 +661,7 @@ combined_data_standardized %>%
 ```
 
 ### Visualisation of data after transformation and standardisation
-Note: The values of the cell types become unitless after the standardisation. That is why there is no unit for the data of the cell types in both boxplots.
+Note: The values of the cell types become unitless after the standardization. That is why there is no unit for the data of the cell types in both boxplots.
 
 
 ```{r}
@@ -685,18 +714,8 @@ combined_data_standardized %>%
   )
 ```
 
-
 Again we can see that after the transformation and standardization there are no more outliers.
 
-(deze chunck code wegdoen?)
-```{r}
-#Search for the ouliers in HLADR_neg_CD38_pos_CD4_pos_T_cells
-combined_data_standardized %>%
-  select(donor_id, HLADR_neg_CD38_pos_CD4_pos_T_cells)%>%
-  arrange(-HLADR_neg_CD38_pos_CD4_pos_T_cells)%>%
-  head()%>%
-  tail()
-```
 
 ```{r}
 #Save the standerdized data as a csv file
@@ -729,7 +748,43 @@ exp(coef(logistic_model)) #to make odds ratio out of the log-odds the exponentia
 #confidence interval of 95% for odds ratio
 exp(confint(logistic_model, level = 0.95))
 ```
-### Visualization of odds ratios of the two cell types
+
+
+
+### Visualization of log odds and odds ratios of the two cell types
+
+Visualization of the log odds of both cell types
+```{r}
+# Extract coefficients
+coefficients <- summary(logistic_model)$coefficients
+log_odds <- coefficients[-1, "Estimate"]  # Exclude the intercept
+conf_intervals <- confint(logistic_model, level = 0.95)[-1,]  # Exclude the intercept
+p_values <- coefficients[-1, "Pr(>|z|)"]  # Exclude the intercept
+
+# Create a data frame for plotting
+results <- data.frame(
+  Variable = names(log_odds),
+  log_odds = log_odds,
+  LowerCI = conf_intervals[, 1],
+  UpperCI = conf_intervals[, 2],
+  pValue = p_values
+)
+
+#Visualization of the log odds and 95% confidence intervals of the two cell types
+ggplot(results, aes(x = reorder(Variable, log_odds), y = log_odds)) +
+  geom_point(size = 3, color = "red") +
+  geom_errorbar(aes(ymin = LowerCI, ymax = UpperCI), width = 0.2, color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
+  geom_text(aes(label = ifelse(pValue < 0.05, paste0("p = ", format(pValue, nsmall = 4)), paste0("p = ", round(pValue, 4)))), 
+            hjust = -0.2, vjust = 0.5, size = 3) +
+  labs(title = "Log Odds and 95% Confidence Intervals of the Two Cell Types",
+       x = "Cell Type",
+       y = "Log Odds") +
+  theme_minimal() +                              
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Odds ratio visualization of both cell types
 
 ```{r}
 # Odds ratios (effect size)
@@ -775,6 +830,7 @@ The odds ratio is approximately 0.77 (95%CI [0.5783082, 1.0088470]). This means 
 
 In summary, CD161_pos_CD45RA_pos_Tregs appears to be a significant predictor of vaccine response, while HLADR_neg_CD38_pos_CD4_pos_T_cells shows a potential but not statistically strong association. So the null hypothesis for CD161_pos_CD45RA_pos_Tregs can be rejected, but for HLADR_neg_CD38_pos_CD4_pos_T_cells it cannot be rejected.
 
+
 # Machine Learning
 The machine learning model was made in python code (see other file). Here we just made the used dataset. This data set contains all the cell types that are expressed in "% of Parent" and the vaccine response. Missing data of those cell types are also being imputated by the mean of that cell type as seen before under Research question 2. This is done to ensure that the data is on the same scale and can be used for the machine learning model.
 
@@ -796,7 +852,7 @@ Experimental data is filtered to only include the cell types in "% of Parent" un
 #Select only the rows with the units of % of parent
 influ_pre_exp_P <- influ_fact %>%
   filter(units == "% of Parent")
-head(influ_pre_exp)
+head(influ_pre_exp_P)
 ```
 
 Selecting the experimental data (same as before in # data exploration)
@@ -817,6 +873,39 @@ influ_exp_name_Parent <- influ_exp_P %>%
 head(influ_exp_name_Parent)
 ```
 
+Controlling the amount of missing values for each celltype within the (% of Parent) influ_exp_name_Parent dataset. This is done to see which cell types have the least amount of missing values. This is done to see which cell types are the most interesting to use for the machine learning model and avoid bias.
+
+```{r}
+#Calculating the amount of missing values per celtype before imputation
+missing_values_exp_P <- influ_exp_name_Parent %>%
+  summarise_all(~sum(is.na(.))/n())%>%
+  gather() %>%
+  arrange(-value) #Sorting from high to low
+missing_values_exp_P
+```
+We can see that most of the cell types have a high amount of missing values (>0.92). We will exclude these cell types from the machine learning model, because these could introduce bias. We will set the cut-off at 0,5 (or 50%) of missing values. This means that we will only include the cell types that have less than 50% of missing values for the machine learning model.
+
+```{r}
+#Making a list with all the celtypes that have less than 50% of missing values
+celltypes_P <- missing_values_exp_P %>%
+  filter(value < 0.5)%>%
+  select(key)%>%
+  pull()
+length(celltypes_P)
+```
+
+We will use 76 cel types to train the machine learning model (77 - 1, because donorID is in the dataset but is not a cell type!).
+
+```{r}
+#Filtering the influ_exp_name_Parent dataset to only include the cell types that have less than 50% of missing values (celltypes_P)
+
+influ_exp_name_Parent <- influ_exp_name_Parent %>%
+  select(donor_id, celltypes_P)
+head(influ_exp_name_Parent)
+summary(influ_exp_name_Parent)
+```
+
+
 Adding the vaccine response to the experimental data from the metadata dataset. This is done to see if the cell types can predict the vaccine response.
 ```{r}
 influ_exp_name_Parent <- influ_exp_name_Parent %>%
@@ -824,6 +913,7 @@ influ_exp_name_Parent <- influ_exp_name_Parent %>%
 ```
 
 Before imputation of the missing values, the dataset is divided into 2 groups based on the vaccine_response. Otherwise they would be imputed together and this would not be correct.
+
 ```{r}
 # Dividing the influ_HP dataset into 2 groups based on the vaccine_response
 influ_HP_vaccine_responders_P <- influ_exp_name_Parent %>%
