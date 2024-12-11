@@ -6,6 +6,11 @@ output:
   html_document:
     toc: true
     theme: united
+    highlight: tango
+    code_folding: show
+    toc_float: true
+    number_sections: true
+    toc_depth: 5
 ---
 # Data exploration
 ```{r}
@@ -318,7 +323,7 @@ ggplot(summary_data, aes(x = age_cat, y = percentage, fill = response)) +
   geom_text(aes(label = paste0(round(percentage, 1), "%")), 
             position = position_stack(vjust = 0.5), size = 4, color = "white") +
   annotate("text", x = Inf, y = Inf, label = paste("P-value =", round(p_value, 4)), 
-           hjust = 3.85, vjust = 0.9, size = 4, color = "black")
+           hjust = 4, vjust = 0.9, size = 4, color = "black")
 ```
 
 
@@ -736,7 +741,14 @@ logistic_model <- glm(vaccine_response ~ CD161_pos_CD45RA_pos_Tregs + HLADR_neg_
 # Summary of the model
 summary(logistic_model)
 ```
-The result we get is the log-odds for the different cell types. 
+The result we get is the log-odds for the different cell types.
+
+Now we investigate the R-squared.
+```{r}
+# R-squared
+1 - logistic_model$deviance / logistic_model$null.deviance
+```
+Although we have one celtype that is significant we can see that the R-squared has a low value (0.084). This means that our model is of low quality. 
 
 ```{r}
 #Confidence interval of 95% of the log-odds 
@@ -967,3 +979,4 @@ head(combined_data_P)
 #save the data
 write.csv(combined_data_P, "combined_data_P.csv")
 ```
+
