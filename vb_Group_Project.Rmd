@@ -1,6 +1,6 @@
 ---
-title: "Group_Project"
-author: "Mathis Mortier, Femke Van Hoenacker, Bleyke Van Denderen, Maxence Cayzeele"
+title: "Group Project, Immunology - Influenza"
+author: "Mathis Mortier, Femke Van Hoenacker, Bleyke van Denderen, Maxence Cayzeele"
 date: "2024-11-14"
 output: 
   html_document:
@@ -541,7 +541,7 @@ We see that there are enough datapoints to conduct a statistical test. For the l
 combined_data %>%
   ggplot(aes(x=vaccine_response, y=HLADR_neg_CD38_pos_CD4_pos_T_cells, col = vaccine_response))+
   geom_boxplot()+
-  labs(title = "High vs low responders HLADR_neg_CD38_pos_CD4_pos_T_cells", x = "Vaccine response", y = "HLADR_neg_CD38_pos_CD4_pos_T_cells (% of parent")+
+  labs(title = "High vs low responders HLADR_neg_CD38_pos_CD4_pos_T_cells", x = "Vaccine response", y = "HLADR_neg_CD38_pos_CD4_pos_T_cells (% of parent)")+
   scale_color_manual(values = c("#E69F00", "#56B4E9"), #color-blind friendly colors
                     labels = c("0" = "Low responder", "1" = "High responder"))+
   theme_minimal()
@@ -671,7 +671,7 @@ combined_data_standardized %>%
   labs(
     title = "High vs low responders CD161_pos_CD45RA_pos_Tregs",
     x = "Vaccine Response",
-    y = "CD161_pos_CD45RA_pos_Tregs"
+    y = "log(CD161_pos_CD45RA_pos_Tregs)"
   ) +
   scale_color_manual(
     values = c("#E69F00", "#56B4E9"),  # Color-blind friendly colors
@@ -697,7 +697,7 @@ combined_data_standardized %>%
   labs(
     title = "High vs low responders HLADR_neg_CD38_pos_CD4_pos_T_cells",
     x = "Vaccine Response",
-    y = "HLADR_neg_CD38_pos_CD4_pos_T_cells"
+    y = "log(HLADR_neg_CD38_pos_CD4_pos_T_cells)"
   ) +
   scale_color_manual(
     values = c("#E69F00", "#56B4E9"),  # Color-blind friendly colors
@@ -974,4 +974,3 @@ head(combined_data_P)
 #save the data
 write.csv(combined_data_P, "combined_data_P.csv")
 ```
-
