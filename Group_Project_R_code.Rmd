@@ -1,6 +1,6 @@
 ---
 title: "Group Project, Immunology - Influenza"
-author: "Mathis Mortier, Femke Van Hoenacker, Bleyke van Denderen, Maxence Cayzeele"
+author:
 date: "2024-11-14"
 output: 
   html_document:
